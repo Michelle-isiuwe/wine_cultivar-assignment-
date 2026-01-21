@@ -1,14 +1,12 @@
 """
 🍷 Wine Cultivar Origin Prediction System - Streamlit Web GUI
 Predicts wine cultivar (origin/class) based on 6 chemical properties
-Using PyTorch Neural Network trained on 6 selected features
+Using Random Forest Classifier trained on 6 selected features
 """
 
 import streamlit as st
 import numpy as np
-import torch
-import torch.nn as nn
-import pickle
+import joblib
 import os
 
 # Page configuration
@@ -33,52 +31,15 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Define the Neural Network Model
-class WineNeuralNetwork(nn.Module):
-    """Neural Network for Wine Cultivar Classification"""
-    
-    def __init__(self, input_size=6, hidden_size1=64, hidden_size2=32, num_classes=3):
-        super(WineNeuralNetwork, self).__init__()
-        self.fc1 = nn.Linear(input_size, hidden_size1)
-        self.bn1 = nn.BatchNorm1d(hidden_size1)
-        self.relu1 = nn.ReLU()
-        self.dropout1 = nn.Dropout(0.3)
-        
-        self.fc2 = nn.Linear(hidden_size1, hidden_size2)
-        self.bn2 = nn.BatchNorm1d(hidden_size2)
-        self.relu2 = nn.ReLU()
-        self.dropout2 = nn.Dropout(0.3)
-        
-        self.fc3 = nn.Linear(hidden_size2, num_classes)
-    
-    def forward(self, x):
-        x = self.fc1(x)
-        x = self.bn1(x)
-        x = self.relu1(x)
-        x = self.dropout1(x)
-        
-        x = self.fc2(x)
-        x = self.bn2(x)
-        x = self.relu2(x)
-        x = self.dropout2(x)
-        
-        x = self.fc3(x)
-        return x
-
 # Load model and scaler
 @st.cache_resource
 def load_model_and_scaler():
     """Load the trained model and scaler"""
     try:
-        # Initialize model
-        device = torch.device('cpu')
-        model = WineNeuralNetwork(input_size=6, hidden_size1=64, hidden_size2=32, num_classes=3)
-        
-        # Load model weights
-        model_path = "wine_model.pth"
+        # Load model
+        model_path = "wine_model.pkl"
         if os.path.exists(model_path):
-            model.load_state_dict(torch.load(model_path, map_location=device))
-            model.eval()
+            model = joblib.load(model_path)
         else:
             st.error("❌ Model file not found! Please run train_model.py first.")
             st.stop()
@@ -86,8 +47,7 @@ def load_model_and_scaler():
         # Load scaler
         scaler_path = "scaler.pkl"
         if os.path.exists(scaler_path):
-            with open(scaler_path, 'rb') as f:
-                scaler = pickle.load(f)
+            scaler = joblib.load(scaler_path)
         else:
             st.error("❌ Scaler file not found! Please run train_model.py first.")
             st.stop()
@@ -112,7 +72,7 @@ st.markdown("""
 
 Enter the chemical properties of your wine sample to predict its **cultivar (origin/class)**.
 
-The model uses a **PyTorch Neural Network** trained on 6 key wine chemical features:
+The model uses a **Random Forest Classifier** trained on 6 key wine chemical features:
 1. **Alcohol** - Alcohol content percentage
 2. **Malic Acid** - Level of malic acid
 3. **Total Phenols** - Total phenols content
@@ -215,14 +175,9 @@ if model_loaded:
         # Scale features
         features_scaled = scaler.transform(features_array)
         
-        # Convert to PyTorch tensor
-        features_tensor = torch.FloatTensor(features_scaled)
-        
         # Make prediction
-        with torch.no_grad():
-            outputs = model(features_tensor)
-            probabilities = torch.softmax(outputs, dim=1)[0].numpy()
-            prediction = torch.argmax(outputs, dim=1).item()
+        prediction = model.predict(features_scaled)[0]
+        probabilities = model.predict_proba(features_scaled)[0]
         
         confidence = probabilities[prediction]
         
@@ -319,15 +274,14 @@ if model_loaded:
         st.info("""
         **Wine Cultivar Prediction Model**
         
-        - **Framework**: PyTorch Neural Network
-        - **Architecture**: 
-          - Input: 6 features
-          - Hidden 1: 64 neurons + BatchNorm
-          - Hidden 2: 32 neurons + BatchNorm
-          - Output: 3 cultivars
-        - **Features**: 6 selected chemical properties
+        - **Framework**: scikit-learn
+        - **Algorithm**: Random Forest Classifier
+        - **Configuration**: 
+          - Number of Trees: 100
+          - Max Depth: 15
+          - Features: 6 selected chemical properties
         - **Classes**: 3 wine cultivars
-        - **Model Persistence**: PyTorch (.pth)
+        - **Model Persistence**: Joblib (.pkl)
         
         **Performance Metrics**:
         - Accuracy: ~97%
@@ -364,6 +318,6 @@ else:
     This will:
     1. Load the wine dataset
     2. Preprocess and scale features
-    3. Train the PyTorch neural network
+    3. Train the Random Forest Classifier
     4. Save the model and scaler
     """)
